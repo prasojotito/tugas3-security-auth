@@ -26,7 +26,11 @@ export const createStallBody = z.object({
   description: z.string().max(1000, 'description maksimal 1000 karakter').optional(),
 });
 
-export const updateStallBody = createStallBody.partial();
+export const updateStallBody = createStallBody
+  .partial()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'minimal satu field harus diisi',
+  });
 
 export const createReviewBody = z.object({
   rating: z

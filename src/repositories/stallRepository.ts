@@ -17,6 +17,8 @@ export interface CreateStallInput {
   description?: string | null;
 }
 
+export type UpdateStallInput = Partial<Omit<CreateStallInput, 'ownerId'>>;
+
 export class StallRepository {
   async findAll(params: FindAllParams) {
     const db = await getDb();
@@ -65,12 +67,11 @@ export class StallRepository {
     return rows[0];
   }
 
-  async update(id: number, input: Partial<CreateStallInput>) {
+  async update(id: number, input: UpdateStallInput) {
     const db = await getDb();
     const rows = await db
       .update(stalls)
       .set({
-        ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.category !== undefined ? { category: input.category } : {}),
         ...(input.location !== undefined ? { location: input.location } : {}),

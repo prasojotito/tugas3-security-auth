@@ -26,6 +26,7 @@ BEGIN
         (15, N'Dewi Lestari', N'dewi@student.test',   N'hash_cust4',  N'customer');
     SET IDENTITY_INSERT dbo.USERS OFF;
     DBCC CHECKIDENT ('dbo.USERS', RESEED, 15) WITH NO_INFOMSGS;
+        UPDATE dbo.USERS SET password_hash = N'$2b$10$CXeKvGf8L2z/42indo855.SHEkjDRZK0eJu7.1kGgyNCT/7QhqZjO';
     PRINT 'Seed USERS selesai.';
 END
 GO

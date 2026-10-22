@@ -1,28 +1,24 @@
 import type { Request, Response } from 'express';
 import { ApiService } from '../services/apiService.ts';
+import { AppError } from '../errors/AppError.ts';
+
+const ERROR_MAP: Record<string, { status: number; message: string }> = {
+  LIKE_ALREADY_EXISTS: { status: 409, message: 'Like sudah ada' },
+  INVALID_USER_INPUT: { status: 400, message: 'Data user tidak valid' },
+  INVALID_MENU_INPUT: { status: 400, message: 'Data menu tidak valid' },
+  INVALID_REVIEW_INPUT: { status: 400, message: 'Data review tidak valid' },
+  INVALID_LIKE_INPUT: { status: 400, message: 'Data like tidak valid' },
+  INVALID_FLAG_STATUS: { status: 400, message: 'Status flag tidak valid' },
+  INVALID_AUDIT_INPUT: { status: 400, message: 'Data audit tidak valid' },
+};
 
 export class ApiController {
   constructor(private readonly service: ApiService = new ApiService()) {}
 
-  private handleError(res: Response, error: unknown): Response {
-    if (error instanceof Error) {
-      const statusByError: Record<string, number> = {
-        LIKE_ALREADY_EXISTS: 409,
-        INVALID_USER_INPUT: 400,
-        INVALID_MENU_INPUT: 400,
-        INVALID_REVIEW_INPUT: 400,
-        INVALID_LIKE_INPUT: 400,
-        INVALID_FLAG_STATUS: 400,
-        INVALID_AUDIT_INPUT: 400,
-      };
-      const statusCode = statusByError[error.message];
-      if (statusCode) return res.status(statusCode).json({ status: 'fail', message: error.message });
-    }
-    return res.status(500).json({
-      status: 'error',
-      message: 'Terjadi kesalahan pada server',
-      error: error instanceof Error ? error.message : String(error),
-    });
+    private handleError(_res: Response, error: unknown): never {
+    const mapped = error instanceof Error ? ERROR_MAP[error.message] : undefined;
+    if (mapped) throw new AppError(mapped.status, mapped.message);
+    throw error;
   }
 
   getUsers = async (_req: Request, res: Response) => {

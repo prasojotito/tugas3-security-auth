@@ -591,10 +591,6 @@
     "StallInput": {
       "type": "object",
       "properties": {
-        "ownerId": {
-          "type": "number",
-          "example": 2
-        },
         "name": {
           "type": "string",
           "example": "Warung Baru"
@@ -613,7 +609,6 @@
         }
       },
       "required": [
-        "ownerId",
         "name"
       ]
     }

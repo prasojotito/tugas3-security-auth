@@ -37,7 +37,6 @@ const doc = {
       metadata: '{"status":"resolved"}',
     },
     StallInput: {
-      $ownerId: 2,
       $name: 'Warung Baru',
       category: 'Nasi',
       location: 'Kantin FK',

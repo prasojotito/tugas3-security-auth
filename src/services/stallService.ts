@@ -2,6 +2,7 @@ import {
   StallRepository,
   type CreateStallInput,
   type FindAllParams,
+  type UpdateStallInput,
 } from '../repositories/stallRepository.ts';
 import { MenuItemRepository } from '../repositories/menuItemRepository.ts';
 import type { MenuItemDto, StallResponseDto } from '../dtos/stallDto.ts';
@@ -62,7 +63,7 @@ export class StallService {
     return this.toDto(row);
   }
 
-  async updateStall(id: number, input: Partial<CreateStallInput>): Promise<StallResponseDto> {
+  async updateStall(id: number, input: UpdateStallInput): Promise<StallResponseDto> {
     const row = await this.stallRepository.update(id, input);
     if (!row) throw new AppError(404, STALL_NOT_FOUND_MESSAGE);
     return this.toDto(row);
