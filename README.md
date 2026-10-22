@@ -1,357 +1,259 @@
-# Hands-on 2 — Akses Database dengan Drizzle ORM
+# Tugas 3 — Validasi, Error, dan Auth (Review Kantin Kampus)
 
-Hands-on ini mengganti akses data dari query SQL manual menjadi **ORM (Drizzle)**,
-tetap memakai arsitektur berlapis (Repository → Service → Controller → Router).
+REST API Review Kantin Kampus, lanjutan dari Tugas 2. Pada tugas ini ditambahkan:
 
-> File ini adalah sumber langkah utama.
+- **Validasi input** dengan **Zod**, dengan **satu format error** yang seragam.
+- **Autentikasi** dengan **JWT**.
+- **Otorisasi berbasis role** (`admin`, `owner`, `customer`) dengan pembeda yang jelas antara **401** dan **403**.
+- **Dokumentasi API** (Swagger/OpenAPI) di `/docs`.
 
-## Prinsip
+Arsitektur tetap berlapis: Router → Controller → Service → Repository, dengan akses data memakai Drizzle ORM ke SQL Server.
 
-- **Skema DDL tetap dikelola di `../db/*.sql`** (recall ERD di SQL Server).
-- Drizzle dipakai untuk **query bertipe** dari aplikasi.
-- `src/db/schema.ts` **ditulis manual**, bukan hasil `drizzle-kit pull`. Alasannya:
-  intropeksi (`pull`) Drizzle untuk MSSQL masih **RC** dan belum stabil.
+## Tech Stack
+
+| Komponen     | Teknologi                                       |
+|--------------|-------------------------------------------------|
+| Runtime      | Node.js >= 22.18.0, TypeScript (dijalankan via `tsx`) |
+| Framework    | Express                                         |
+| Database     | SQL Server (`mssql`) + Drizzle ORM              |
+| Validasi     | Zod                                             |
+| Autentikasi  | JWT (`jsonwebtoken`), hash password (`bcrypt`)  |
+| Dokumentasi  | `swagger-autogen` + `swagger-ui-express`        |
 
 ## Prasyarat
 
-- Node.js **>= 22.18.0**, npm
-- SQL Server aktif + database sudah disiapkan:
-
-```powershell
-sqlcmd -S localhost -E -C -i ..\db\00-setup-mixed-mode.sql       # sekali saja
-sqlcmd -S localhost -E -C -i ..\db\01-create-database-and-user.sql
-sqlcmd -S localhost -E -C -i ..\db\02-schema.sql
-sqlcmd -S localhost -E -C -i ..\db\03-seed.sql
-```
-
----
-
-## Langkah 1 — Buat project & install dependencies
+- Node.js >= 22.18.0 dan npm
+- SQL Server aktif, dengan database `review_kantin` sudah disiapkan (skema DDL dan seed dari Tugas 2)
 
 ```bash
-npm init -y
-npm install express mssql dotenv drizzle-orm@1.0.0-rc.5-5935859 swagger-ui-express swagger-autogen
-npm install -D typescript @types/express @types/mssql @types/node tsx drizzle-kit@1.0.0-rc.5-5935859 @types/swagger-ui-express
+sqlcmd -S localhost -E -C -i db\00-setup-mixed-mode.sql
+sqlcmd -S localhost -E -C -i db\01-create-database-and-user.sql
+sqlcmd -S localhost -E -C -i db\02-schema.sql
+sqlcmd -S localhost -E -C -i db\03-seed.sql
 ```
 
-> Versi `drizzle-orm`/`drizzle-kit` dipatok ke RC yang sudah diuji. Drizzle untuk MSSQL
-> masih preview, jadi API bisa berubah.
+> Sesuaikan path file `.sql` dengan lokasi di komputer kamu.
 
-### `package.json`
-
-```json
-{
-  "main": "src/index.ts",
-  "scripts": {
-    "start": "tsx src/index.ts",
-    "prestart": "npm run docs:gen",
-    "dev": "tsx watch src/index.ts",
-    "predev": "npm run docs:gen",
-    "docs:gen": "tsx src/docs/swagger.ts"
-  },
-  "type": "commonjs"
-}
-```
-
-## Langkah 2 — Konfigurasi `.env`
-
-```powershell
-Copy-Item .env.example .env
-```
-
-```
-DB_SERVER=localhost
-DB_PORT=1433
-DB_USER=praktikum_user
-DB_PASSWORD=Praktikum2026!
-DB_NAME=review_kantin
-DB_ENCRYPT=false
-DB_TRUST_SERVER_CERTIFICATE=true
-```
-
-> Nilai yang mengandung `#` wajib dibungkus tanda kutip (dotenv menganggap `#` komentar).
-
-## Langkah 3 — Definisikan schema (`src/db/schema.ts`)
-
-Kita memetakan tabel SQL Server ke objek TypeScript memakai `mssqlTable` dan
-builder kolom `mssql-core`.
-
-```ts
-import { mssqlTable, int, bit, nvarchar, decimal, datetime2 } from 'drizzle-orm/mssql-core';
-
-export const users = mssqlTable('USERS', {
-  id: int('id').primaryKey().identity(),
-  name: nvarchar('name', { length: 100 }).notNull(),
-  email: nvarchar('email', { length: 150 }).notNull().unique(),
-  passwordHash: nvarchar('password_hash', { length: 255 }).notNull(),
-  role: nvarchar('role', { length: 20, enum: ['admin', 'owner', 'customer'] }).notNull(),
-  createdAt: datetime2('created_at'),
-});
-
-export const stalls = mssqlTable('STALLS', {
-  id: int('id').primaryKey().identity(),
-  ownerId: int('owner_id').notNull().references(() => users.id),
-  name: nvarchar('name', { length: 100 }).notNull(),
-  category: nvarchar('category', { length: 50 }),
-  location: nvarchar('location', { length: 100 }),
-  description: nvarchar('description', { length: 'max' }),
-  avgRating: decimal('avg_rating', { precision: 3, scale: 2 }).notNull(),
-  reviewCount: int('review_count').notNull(),
-  createdAt: datetime2('created_at'),
-});
-
-export const menuItems = mssqlTable('MENU_ITEMS', {
-  id: int('id').primaryKey().identity(),
-  stallId: int('stall_id').notNull().references(() => stalls.id),
-  name: nvarchar('name', { length: 100 }).notNull(),
-  price: int('price').notNull(),
-  isAvailable: bit('is_available').notNull(),
-});
-```
-
-`src/db/schema.ts` juga memuat `reviews`, `likes`, `flags`, dan `auditLogs`
-(tabel lain dari ERD yang belum dipakai di hands-on ini).
-
-## Langkah 4 — Inisialisasi koneksi (`src/db/index.ts`)
-
-```ts
-import 'dotenv/config';
-import mssql from 'mssql';
-import { drizzle } from 'drizzle-orm/node-mssql';
-import * as schema from './schema.ts';
-
-const config: mssql.config = {
-  server: process.env.DB_SERVER ?? 'localhost',
-  port: Number(process.env.DB_PORT ?? 1433),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  options: {
-    encrypt: process.env.DB_ENCRYPT === 'true',
-    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
-  },
-};
-
-let poolPromise: Promise<mssql.ConnectionPool> | null = null;
-let dbPromise: ReturnType<typeof buildDb> | null = null;
-
-async function buildDb() {
-  poolPromise ??= mssql.connect(config);
-  const pool = await poolPromise;
-  return drizzle({ client: pool, schema });
-}
-
-export function getDb() {
-  if (!dbPromise) {
-    dbPromise = buildDb().catch((error) => {
-      dbPromise = null;
-      poolPromise = null;
-      throw error;
-    });
-  }
-  return dbPromise;
-}
-```
-
-## Langkah 5 — Repository dengan query builder
-
-`src/repositories/stallRepository.ts`:
-
-```ts
-import { and, count, eq, like, type SQL } from 'drizzle-orm';
-import { getDb } from '../db/index.ts';
-import { stalls } from '../db/schema.ts';
-
-export class StallRepository {
-  async findAll(params: FindAllParams) {
-    const db = await getDb();
-
-    const conditions: SQL[] = [];
-    if (params.search) conditions.push(like(stalls.name, `%${params.search}%`));
-    if (params.category) conditions.push(eq(stalls.category, params.category));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const offset = (params.page - 1) * params.limit;
-
-    // MSSQL: pagination = ORDER BY + OFFSET ... FETCH NEXT
-    const rows = await db
-      .select()
-      .from(stalls)
-      .where(where)
-      .orderBy(stalls.id)
-      .offset(offset)
-      .fetch(params.limit);
-
-    const totals = await db.select({ total: count() }).from(stalls).where(where);
-
-    return { rows, total: Number(totals[0]?.total ?? 0) };
-  }
-
-  async create(input: CreateStallInput) {
-    const db = await getDb();
-    const rows = await db.insert(stalls).output().values({ /* ... */ });
-    return rows[0];
-  }
-}
-```
-
-Join contoh (menu items) — `src/repositories/menuItemRepository.ts`:
-
-```ts
-import { eq } from 'drizzle-orm';
-import { getDb } from '../db/index.ts';
-import { menuItems } from '../db/schema.ts';
-
-export class MenuItemRepository {
-  async findByStallId(stallId: number) {
-    const db = await getDb();
-    return db.select().from(menuItems).where(eq(menuItems.stallId, stallId));
-  }
-}
-```
-
-## Langkah 6 — Service (mapping + logika bisnis)
-
-`src/services/stallService.ts` memetakan row DB menjadi DTO camelCase dan menghitung
-`isPopular` (rating ≥ 4.7). Perhatikan: `decimal` dari driver berbentuk **string**,
-jadi di-`Number(...)`.
-
-```ts
-private toDto(row: StallRow): StallResponseDto {
-  const avgRating = Number(row.avgRating);
-  return { ...row, avgRating, isPopular: avgRating >= 4.7 };
-}
-```
-
-## Langkah 7 — Controller, Router, dan Entry point
-
-- `src/controllers/stallController.ts` — handler Express, memetakan `STALL_NOT_FOUND` → 404.
-- `src/routes/stallRouter.ts` — pemetaan endpoint.
-- `src/index.ts` — server Express + `GET /health` (`SELECT 1` via Drizzle).
-
-## Langkah 8 — Jalankan & uji
+## Instalasi & Menjalankan
 
 ```bash
+# 1. Clone repo
+git clone https://github.com/prasojotito/tugas3-security-auth.git
+cd tugas3-security-auth
+
+# 2. Install dependencies
+npm install
+
+# 3. Salin konfigurasi environment, lalu isi nilainya
+copy .env.example .env        # Windows (PowerShell: Copy-Item .env.example .env)
+# cp .env.example .env        # Linux/macOS
+
+# 4. Jalankan server (otomatis generate dokumentasi Swagger)
 npm run dev
 ```
 
-| Method | Endpoint | Hasil |
-| --- | --- | --- |
-| GET | `/health` | `200` koneksi DB OK |
-| GET | `/docs` | Swagger UI (spec hasil generate `swagger-autogen`) |
-| GET | `/api/v1/stalls?search=&category=&page=&limit=` | `200` daftar + `meta {page,limit,total}` |
-| GET | `/api/v1/stalls/:id` | `200` detail, `404` bila tak ada |
-| GET | `/api/v1/stalls/:id/menus` | `200` daftar menu (join) |
-| POST | `/api/v1/stalls` | `201` stall baru |
-| PUT | `/api/v1/stalls/:id` | `200` stall ter-update |
-| DELETE | `/api/v1/stalls/:id` | `200` stall terhapus |
+Server berjalan di `http://localhost:3000` dan dokumentasi API di `http://localhost:3000/docs`.
 
-## Endpoint wajib per tabel
+## Konfigurasi Environment
 
-| Tabel | Endpoint | Keterangan |
-| --- | --- | --- |
-| USERS | `GET /api/v1/users`, `POST /api/v1/users` | Password hash tidak dikirim pada response. |
-| STALLS | `/api/v1/stalls` | Full CRUD, filter `search`/`category`, dan pagination `page`/`limit`. |
-| MENU_ITEMS | `/api/v1/menu-items` | Full CRUD; response menyertakan objek `stall`. |
-| REVIEWS | `GET/POST /api/v1/reviews`, `DELETE /api/v1/reviews/:id` | Response menyertakan objek `user`; rating warung dihitung ulang saat review berubah. |
-| LIKES | `POST /api/v1/likes`, `DELETE /api/v1/likes/:id` | `likeCount` review ikut diperbarui; like duplikat ditolak. |
-| FLAGS | `GET /api/v1/flags`, `PUT /api/v1/flags/:id` | Body PUT: `{ "status": "pending" | "dismissed" | "resolved" }`. |
-| AUDIT | `GET/POST /api/v1/audit` | POST membuat entri audit. |
+Salin `.env.example` menjadi `.env`. File `.env` **tidak** ikut ter-commit.
 
-Body POST user memakai `name`, `email`, `passwordHash`, dan `role`. Body POST menu
-memakai `stallId`, `name`, `price`, dan opsional `isAvailable`; body review memakai
-`stallId`, `userId`, `rating` (1–5), dan opsional `comment`; body like memakai
-`reviewId` dan `userId`. Rincian payload juga tersedia di `/docs`.
+```env
+# Database
+DB_SERVER=localhost
+DB_PORT=1433
+DB_USER=praktikum_user
+DB_PASSWORD=isi_password_database
+DB_NAME=review_kantin
+DB_ENCRYPT=false
+DB_TRUST_SERVER_CERTIFICATE=true
 
-Contoh:
+# JWT
+JWT_SECRET=ganti_dengan_secret_acak_yang_panjang
+JWT_EXPIRES_IN=1h
+```
+
+> Nilai yang mengandung `#` wajib dibungkus tanda kutip (dotenv menganggap `#` sebagai komentar).
+
+## Script
+
+| Script             | Fungsi                                                      |
+|--------------------|-------------------------------------------------------------|
+| `npm run dev`      | Menjalankan server mode watch (menjalankan `docs:gen` dulu) |
+| `npm start`        | Menjalankan server (menjalankan `docs:gen` dulu)            |
+| `npm run docs:gen` | Menghasilkan `src/docs/swagger-output.json`                 |
+
+## Role & Hak Akses
+
+| Role     | Hak Akses                          |
+|----------|------------------------------------|
+| `admin`  | Semua endpoint                     |
+| `owner`  | Endpoint untuk mengelola warung **miliknya sendiri** |
+| `customer` | Menambah review                  |
+| public (tanpa role) | Endpoint publik dan auth |
+
+Identitas user (id dan role) **selalu diambil dari token JWT**, bukan dari request body. Registrasi lewat `POST /auth/register` tidak menerima field `role` dari klien.
+
+## Daftar Endpoint & Otorisasi
+
+| Method | Endpoint                | Akses                                | Keterangan                          |
+|--------|-------------------------|--------------------------------------|-------------------------------------|
+| POST   | `/auth/register`        | Publik                               | Daftar akun baru                    |
+| POST   | `/auth/login`           | Publik                               | Login, mengembalikan token JWT      |
+| GET    | `/auth/me`              | Login (semua role)                   | Data user dari token                |
+| GET    | `/stalls`               | Publik                               | Daftar warung (search, filter, pagination) |
+| GET    | `/stalls/:id`           | Publik                               | Detail warung                       |
+| POST   | `/stalls`               | `owner`, `admin`                     | Buat warung                         |
+| PUT    | `/stalls/:id`           | `owner` (hanya miliknya), `admin`    | Ubah warung                         |
+| DELETE | `/stalls/:id`           | `admin`                              | Hapus warung                        |
+| POST   | `/stalls/:id/reviews`   | Login (semua role)                   | Tambah review pada warung           |
+
+Endpoint lain dari Tugas 2 (users, menu-items, likes, flags, audit) tetap tersedia dengan prefix `/api/v1`. Daftar lengkap dan skema request/response ada di `/docs`.
+
+## Autentikasi (JWT)
+
+1. Daftar lewat `POST /auth/register`, lalu login lewat `POST /auth/login`.
+2. Ambil `token` dari response login.
+3. Kirim token pada setiap request ke endpoint yang membutuhkan login:
+
+```
+Authorization: Bearer <token>
+```
+
+Di Swagger UI (`/docs`), klik **Authorize** lalu isi `Bearer <token>`.
+
+Password **di-hash (bcrypt) sebelum disimpan** ke database; password asli tidak pernah disimpan maupun dikembalikan pada response.
+
+## Perbedaan 401 dan 403
+
+| Status | Arti                                        | Contoh kasus                                                    |
+|--------|---------------------------------------------|-----------------------------------------------------------------|
+| `401 Unauthorized` | Belum / tidak terautentikasi    | Tidak ada header `Authorization`, token tidak valid atau kedaluwarsa |
+| `403 Forbidden`    | Sudah login, tetapi tidak punya akses | `customer` memanggil `POST /stalls`; `owner` mengubah warung milik owner lain; `owner` memanggil `DELETE /stalls/:id` |
+
+## Format Error
+
+Semua error memakai satu format yang sama:
+
+```json
+{
+  "status": "fail",
+  "message": "Validasi gagal",
+  "errors": [
+    { "field": "name", "message": "name minimal 3 karakter" },
+    { "field": "password", "message": "password minimal 8 karakter" }
+  ]
+}
+```
+
+Untuk error non-validasi (misalnya 401, 403, 404), field `errors` dapat dihilangkan dan `message` berisi penjelasan singkat:
+
+```json
+{ "status": "fail", "message": "Token tidak valid atau tidak ditemukan" }
+```
+
+| Status | Penyebab                                           |
+|--------|----------------------------------------------------|
+| `400`  | Validasi gagal (body, params, atau query)          |
+| `401`  | Belum / tidak terautentikasi                       |
+| `403`  | Role tidak memenuhi atau bukan pemilik resource    |
+| `404`  | Resource tidak ditemukan                           |
+| `409`  | Konflik data (misalnya email sudah terdaftar)      |
+| `500`  | Kesalahan server                                   |
+
+## Skema Validasi (Zod)
+
+| Endpoint                    | Sumber            | Aturan |
+|-----------------------------|-------------------|--------|
+| `GET /stalls`               | query             | `search`: string, trim, maks 100, opsional · `category`: string, trim, maks 50, opsional · `page`: int, min 1, default 1 · `limit`: int, min 1, maks 100, default 10 |
+| `GET /stalls/:id`           | params            | `id`: int, > 0, wajib |
+| `POST /stalls`              | body              | `name`: string, trim, 3..100, wajib · `category`: string, trim, maks 50, opsional · `location`: string, maks 100, opsional · `description`: maks 1000, opsional |
+| `PUT /stalls/:id`           | params + body     | `id`: int, > 0, wajib · body: versi parsial dari `POST /stalls` (semua opsional) |
+| `DELETE /stalls/:id`        | params            | `id`: int, > 0, wajib |
+| `POST /stalls/:id/reviews`  | params + body     | `id`: int, > 0, wajib · `rating`: int, 1..5, wajib · `comment`: string, trim, maks 1000, opsional |
+| `POST /auth/register`       | body              | `name`: string, trim, 3..100, wajib · `email`: format email, trim, lowercase, maks 150, wajib · `password`: 8..72 karakter, wajib |
+| `POST /auth/login`          | body              | `email`: format email, trim, lowercase, wajib · `password`: minimal 1 karakter, wajib |
+| `GET /auth/me`              | header            | Tidak ada body/params (token dibaca dari header `Authorization`) |
+
+## Contoh Penggunaan
+
+**Register**
 
 ```bash
-curl.exe "http://localhost:3000/api/v1/stalls?category=Minuman&limit=2&page=1"
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Budi Santoso","email":"budi@example.com","password":"rahasia123"}'
 ```
 
----
+**Login**
 
-## Dokumentasi API (Swagger UI)
-
-Dokumentasi dibangun dengan **`swagger-autogen`**: ia memindai file route/entry,
-mendeteksi **path + method secara otomatis**, sedangkan parameter & response ditambahkan
-lewat komentar singkat `#swagger.*` di dalam handler. Hasilnya disajikan lewat
-**`swagger-ui-express`** di `http://localhost:3000/docs`.
-
-Alur:
-
-1. `npm run docs:gen` — memindai `src/index.ts` (beserta router yang diimpor) dan
-   menghasilkan `src/docs/swagger-output.json`.
-2. `npm run dev` — menyajikan spec tersebut di `/docs`.
-   (`predev`/`prestart` otomatis menjalankan `docs:gen` sebelum server start.)
-
-Karena `#swagger.*` harus berada di dalam body handler, route ditulis sebagai handler
-**inline** yang memanggil controller, mis.:
-
-```ts
-stallRouter.get('/', (req, res) => {
-  // #swagger.parameters['search']   = { in: 'query', type: 'string' }
-  // #swagger.parameters['category'] = { in: 'query', type: 'string' }
-  // #swagger.parameters['page']     = { in: 'query', type: 'integer' }
-  // #swagger.parameters['limit']    = { in: 'query', type: 'integer' }
-  // #swagger.responses[200] = { description: 'Daftar warung' }
-  return stallController.getStalls(req, res);
-});
-
-stallRouter.post('/', (req, res) => {
-  // #swagger.parameters['body'] = { in: 'body', required: true, schema: { $ref: '#/definitions/StallInput' } }
-  // #swagger.responses[201] = { description: 'Warung dibuat' }
-  return stallController.createStall(req, res);
-});
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"budi@example.com","password":"rahasia123"}'
 ```
 
-File terkait:
+**Akses endpoint yang butuh login**
 
-- `src/docs/swagger.ts` — definisi `info`, `servers`, `definitions.StallInput`, lalu `swaggerAutogen()(outputFile, endpointsFiles, doc)`.
-- `src/docs/swagger-output.json` — **hasil generate** (di-`.gitignore`, jangan diedit manual).
-- `src/routes/stallRouter.ts` — handler inline + `#swagger.parameters`/`#swagger.responses`.
-- `src/index.ts` — `app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));`
+```bash
+curl http://localhost:3000/auth/me -H "Authorization: Bearer <token>"
+```
 
-Buka `/docs`, lalu klik **Try it out** untuk mengisi parameter/body dan mengirim request.
+**Tanpa token → 401**
 
-> Spec yang dihasilkan berformat **Swagger 2.0** — karena itu schema dirujuk lewat
-> `#/definitions/...` (bukan `#/components/schemas/...`).
+```bash
+curl -i -X POST http://localhost:3000/stalls \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Warung Baru"}'
+```
 
----
+**Role tidak memenuhi → 403** (login sebagai `customer`, lalu buat warung)
 
-## Catatan penting: perbedaan API Drizzle untuk MSSQL
+```bash
+curl -i -X POST http://localhost:3000/stalls \
+  -H "Authorization: Bearer <token-customer>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Warung Baru"}'
+```
 
-Bila terbiasa dengan contoh Drizzle (Postgres/MySQL), ada beberapa perbedaan:
+File `test.http` berisi kumpulan request siap pakai (ekstensi REST Client di VS Code).
 
-- **Pagination**: MSSQL memakai `.orderBy(...).offset(n).fetch(m)` — **bukan** `.limit()`.
-  `.offset()` wajib didahului `.orderBy()`. Ada juga `.top(n)`.
-- **Mengembalikan row saat insert/update/delete**: memakai `.output()` (bukan `.returning()`).
-  Untuk insert, `.output()` dipanggil **sebelum** `.values()`.
-- **`decimal`** dikembalikan sebagai **string** oleh driver; konversi ke `Number` bila perlu.
-- **`drizzle-kit pull`** (introspeksi) untuk MSSQL masih RC dan belum stabil, sehingga
-  `schema.ts` ditulis manual dan DDL tetap di `../db/*.sql`.
+## Akun Uji
+
+Akun dibuat lewat `POST /auth/register` atau seed database. Isi tabel berikut dengan akun yang kamu pakai untuk pengujian:
+
+| Role       | Email | Password |
+|------------|-------|----------|
+| `admin`    | _isi_ | _isi_    |
+| `owner`    | _isi_ | _isi_    |
+| `customer` | _isi_ | _isi_    |
 
 ## Struktur Project
 
 ```
-hands-on-2-orm-drizzle/
+tugas3-security-auth/
 ├─ README.md
 ├─ .env.example
-├─ drizzle.config.ts          # konfigurasi drizzle-kit (referensi)
+├─ drizzle.config.ts
 ├─ package.json  tsconfig.json
+├─ test.http
 └─ src/
-   ├─ db/
-   │  ├─ schema.ts            # pemetaan tabel (manual)
-   │  └─ index.ts            # koneksi Drizzle
-   ├─ docs/
-   │  ├─ swagger.ts           # generator spec (swagger-autogen)
-   │  └─ swagger-output.json  # hasil generate (gitignored)
-   ├─ dtos/stallDto.ts
+   ├─ db/            # schema.ts (pemetaan tabel), index.ts (koneksi Drizzle)
+   ├─ docs/          # swagger.ts (generator), swagger-output.json (hasil generate, gitignored)
+   ├─ schemas/       # skema Zod per endpoint
+   ├─ middlewares/   # validate, authenticate (401), authorize (403), error handler
+   ├─ routes/
+   ├─ controllers/
+   ├─ services/
    ├─ repositories/
-   │  ├─ stallRepository.ts
-   │  └─ menuItemRepository.ts
-   ├─ services/stallService.ts
-   ├─ controllers/stallController.ts
-   ├─ routes/stallRouter.ts
+   ├─ dtos/
    └─ index.ts
 ```
+
+> Sesuaikan nama folder dengan struktur yang sebenarnya di repo.
+
+## Catatan
+
+- Dokumentasi di `/docs` dihasilkan oleh `swagger-autogen` dan berformat **Swagger 2.0**; skema keamanan JWT didefinisikan sebagai `securityDefinitions` (bearer).
+- `src/docs/swagger-output.json` adalah hasil generate dan tidak diedit manual.
+- Drizzle untuk MSSQL masih berstatus RC, sehingga versinya dipatok pada `package.json`.
