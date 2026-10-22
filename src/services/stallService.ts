@@ -5,8 +5,11 @@ import {
 } from '../repositories/stallRepository.ts';
 import { MenuItemRepository } from '../repositories/menuItemRepository.ts';
 import type { MenuItemDto, StallResponseDto } from '../dtos/stallDto.ts';
+import { AppError } from '../errors/AppError.ts';
 
 type StallRow = NonNullable<Awaited<ReturnType<StallRepository['findById']>>>;
+
+const STALL_NOT_FOUND_MESSAGE = 'Data warung tidak ditemukan';
 
 export class StallService {
   private stallRepository: StallRepository;
@@ -43,31 +46,31 @@ export class StallService {
 
   async getStallById(id: number): Promise<StallResponseDto> {
     const row = await this.stallRepository.findById(id);
-    if (!row) throw new Error('STALL_NOT_FOUND');
+    if (!row) throw new AppError(404, STALL_NOT_FOUND_MESSAGE);
     return this.toDto(row);
   }
 
   async getStallMenus(id: number): Promise<MenuItemDto[]> {
     const row = await this.stallRepository.findById(id);
-    if (!row) throw new Error('STALL_NOT_FOUND');
+    if (!row) throw new AppError(404, STALL_NOT_FOUND_MESSAGE);
     return this.menuItemRepository.findByStallId(id);
   }
 
   async createStall(input: CreateStallInput): Promise<StallResponseDto> {
     const row = await this.stallRepository.create(input);
-    if (!row) throw new Error('STALL_NOT_FOUND');
+    if (!row) throw new AppError(500, 'Gagal membuat data warung');
     return this.toDto(row);
   }
 
   async updateStall(id: number, input: Partial<CreateStallInput>): Promise<StallResponseDto> {
     const row = await this.stallRepository.update(id, input);
-    if (!row) throw new Error('STALL_NOT_FOUND');
+    if (!row) throw new AppError(404, STALL_NOT_FOUND_MESSAGE);
     return this.toDto(row);
   }
 
   async deleteStall(id: number): Promise<StallResponseDto> {
     const row = await this.stallRepository.remove(id);
-    if (!row) throw new Error('STALL_NOT_FOUND');
+    if (!row) throw new AppError(404, STALL_NOT_FOUND_MESSAGE);
     return this.toDto(row);
   }
 }

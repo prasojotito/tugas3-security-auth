@@ -57,6 +57,9 @@
         "responses": {
           "200": {
             "description": "Daftar warung"
+          },
+          "400": {
+            "description": "Validasi gagal"
           }
         }
       },
@@ -75,6 +78,9 @@
         "responses": {
           "201": {
             "description": "Warung dibuat"
+          },
+          "400": {
+            "description": "Validasi gagal"
           }
         }
       }
@@ -93,6 +99,9 @@
         "responses": {
           "200": {
             "description": "Detail warung"
+          },
+          "400": {
+            "description": "Validasi gagal"
           },
           "404": {
             "description": "Tidak ditemukan"
@@ -121,6 +130,9 @@
           "200": {
             "description": "Warung ter-update"
           },
+          "400": {
+            "description": "Validasi gagal"
+          },
           "404": {
             "description": "Tidak ditemukan"
           }
@@ -139,6 +151,9 @@
         "responses": {
           "200": {
             "description": "Warung terhapus"
+          },
+          "400": {
+            "description": "Validasi gagal"
           },
           "404": {
             "description": "Tidak ditemukan"
@@ -160,6 +175,9 @@
         "responses": {
           "200": {
             "description": "Daftar menu"
+          },
+          "400": {
+            "description": "Validasi gagal"
           },
           "404": {
             "description": "Tidak ditemukan"
