@@ -3,6 +3,14 @@ import swaggerAutogen from 'swagger-autogen';
 const doc = {
   info: { title: 'Review Kantin API', version: '1.0.0' },
   servers: [{ url: 'http://localhost:3000' }],
+  securityDefinitions: {
+    bearerAuth: {
+      type: 'apiKey',
+      in: 'header',
+      name: 'Authorization',
+      description: 'Isi dengan: Bearer <token>',
+    },
+  },
   definitions: {
     UserInput: {
       $name: 'Nama Pengguna',
@@ -41,6 +49,15 @@ const doc = {
       category: 'Nasi',
       location: 'Kantin FK',
       description: 'Deskripsi warung',
+    },
+    RegisterInput: {
+      $name: 'Budi Santoso',
+      $email: 'budi@example.com',
+      $password: 'rahasia123',
+    },
+    LoginInput: {
+      $email: 'admin@kantin.test',
+      $password: 'Password123!',
     },
   },
 };

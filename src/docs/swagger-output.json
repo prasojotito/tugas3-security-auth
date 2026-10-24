@@ -15,6 +15,14 @@
   "schemes": [
     "http"
   ],
+  "securityDefinitions": {
+    "bearerAuth": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "Authorization",
+      "description": "Isi dengan: Bearer <token>"
+    }
+  },
   "paths": {
     "/health": {
       "get": {
@@ -183,6 +191,83 @@
             "description": "Tidak ditemukan"
           }
         }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/RegisterInput"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Akun dibuat (role customer)"
+          },
+          "400": {
+            "description": "Validasi gagal"
+          },
+          "409": {
+            "description": "Email sudah terdaftar"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LoginInput"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Login berhasil, mengembalikan token JWT"
+          },
+          "400": {
+            "description": "Validasi gagal"
+          },
+          "401": {
+            "description": "Email atau password salah"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Data user dari token"
+          },
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/users": {
@@ -610,6 +695,45 @@
       },
       "required": [
         "name"
+      ]
+    },
+    "RegisterInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "example": "Budi Santoso"
+        },
+        "email": {
+          "type": "string",
+          "example": "budi@example.com"
+        },
+        "password": {
+          "type": "string",
+          "example": "rahasia123"
+        }
+      },
+      "required": [
+        "name",
+        "email",
+        "password"
+      ]
+    },
+    "LoginInput": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "example": "admin@kantin.test"
+        },
+        "password": {
+          "type": "string",
+          "example": "Password123!"
+        }
+      },
+      "required": [
+        "email",
+        "password"
       ]
     }
   }

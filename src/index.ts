@@ -5,6 +5,7 @@ import swaggerDocument from './docs/swagger-output.json' with { type: 'json' };
 import { getDb } from './db/index.ts';
 import { apiRouter } from './routes/apiRouter.ts';
 import { stallRouter } from './routes/stallRouter.ts';
+import { authRouter } from './routes/authRouter.ts';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.ts';
 
 const app: Application = express();
@@ -30,6 +31,7 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 app.use('/api/v1/stalls', stallRouter);
+app.use('/api/v1/auth', authRouter);
 app.use('/api/v1', apiRouter);
 
 app.use(notFoundHandler);
