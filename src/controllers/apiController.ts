@@ -73,7 +73,7 @@ export class ApiController {
   };
 
   createLike = async (req: Request, res: Response) => {
-    try { return res.status(201).json({ status: 'success', data: await this.service.createLike(req.body) }); }
+    try { return res.status(201).json({ status: 'success', data: await this.service.createLike({ ...req.body, userId: req.user!.id }) }); }
     catch (error) { return this.handleError(res, error); }
   };
   deleteLike = async (req: Request, res: Response) => {
@@ -99,7 +99,7 @@ export class ApiController {
     catch (error) { return this.handleError(res, error); }
   };
   createAuditLog = async (req: Request, res: Response) => {
-    try { return res.status(201).json({ status: 'success', data: await this.service.createAuditLog(req.body) }); }
-    catch (error) { return this.handleError(res, error); }
-  };
+  try { return res.status(201).json({ status: 'success', data: await this.service.createAuditLog({ ...req.body, userId: req.user!.id }) }); }
+  catch (error) { return this.handleError(res, error); }
+};
 }

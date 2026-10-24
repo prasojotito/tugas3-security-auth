@@ -1,6 +1,7 @@
-import { and, count, eq, like, type SQL } from 'drizzle-orm';
+import { and, count, eq, inArray, like, type SQL } from 'drizzle-orm';
 import { getDb } from '../db/index.ts';
-import { stalls } from '../db/schema.ts';
+import { menuItems, reviews, stalls } from '../db/schema.ts';
+import { flags, likes } from '../db/schema.ts';
 
 export interface FindAllParams {
   search?: string;
@@ -83,8 +84,21 @@ export class StallRepository {
   }
 
   async remove(id: number) {
-    const db = await getDb();
-    const rows = await db.delete(stalls).where(eq(stalls.id, id)).output();
-    return rows[0];
+  const db = await getDb();
+
+  const reviewRows = await db.select({ id: reviews.id }).from(reviews).where(eq(reviews.stallId, id));
+  const reviewIds = reviewRows.map((r) => r.id);
+
+  if (reviewIds.length > 0) {
+    await db.delete(likes).where(inArray(likes.reviewId, reviewIds));
+    await db.delete(flags).where(inArray(flags.reviewId, reviewIds));
   }
+  await db.delete(reviews).where(eq(reviews.stallId, id));
+  await db.delete(menuItems).where(eq(menuItems.stallId, id));
+
+  const rows = await db.delete(stalls).where(eq(stalls.id, id)).output();
+  return rows[0];
+  }
+  
+  
 }

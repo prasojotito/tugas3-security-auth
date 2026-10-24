@@ -32,7 +32,6 @@ const doc = {
     },
     LikeInput: {
       $reviewId: 1,
-      $userId: 12,
     },
     FlagStatusInput: {
       $status: 'resolved',
@@ -59,10 +58,14 @@ const doc = {
       $email: 'admin@kantin.test',
       $password: 'Password123!',
     },
+    StallReviewInput: {
+      $rating: 5,
+      comment: 'Enak!',
+    },
   },
 };
 
-const outputFile = './swagger-output.json';
+const outputFile = './src/docs/swagger-output.json';
 const endpointsFiles = ['./src/index.ts'];
 
 swaggerAutogen()(outputFile, endpointsFiles, doc);

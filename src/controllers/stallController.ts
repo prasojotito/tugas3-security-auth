@@ -33,18 +33,30 @@ export class StallController {
     return res.status(200).json({ status: 'success', data: menus });
   };
 
+  // ownerId selalu dari token, bukan dari request body.
   createStall = async (req: Request, res: Response): Promise<Response> => {
-    const stall = await this.stallService.createStall(req.body);
+    const stall = await this.stallService.createStall({ ...req.body, ownerId: req.user!.id });
     return res.status(201).json({ status: 'success', data: stall });
   };
 
+  // Pengecekan "owner hanya warung miliknya" dilakukan di service.
   updateStall = async (req: Request, res: Response): Promise<Response> => {
-    const stall = await this.stallService.updateStall(Number(req.params.id), req.body);
+    const stall = await this.stallService.updateStall(Number(req.params.id), req.body, req.user!);
     return res.status(200).json({ status: 'success', data: stall });
   };
 
   deleteStall = async (req: Request, res: Response): Promise<Response> => {
     const stall = await this.stallService.deleteStall(Number(req.params.id));
     return res.status(200).json({ status: 'success', data: stall });
+  };
+
+  // userId penulis review selalu dari token.
+  createReview = async (req: Request, res: Response): Promise<Response> => {
+    const review = await this.stallService.createReview(
+      Number(req.params.id),
+      req.user!.id,
+      req.body,
+    );
+    return res.status(201).json({ status: 'success', data: review });
   };
 }

@@ -75,6 +75,11 @@
         "description": "",
         "parameters": [
           {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "body",
             "in": "body",
             "required": true,
@@ -85,12 +90,23 @@
         ],
         "responses": {
           "201": {
-            "description": "Warung dibuat"
+            "description": "Warung dibuat (pemilik = user dari token)"
           },
           "400": {
             "description": "Validasi gagal"
+          },
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Role tidak memenuhi"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/stalls/{id}": {
@@ -126,6 +142,11 @@
             "type": "integer"
           },
           {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "body",
             "in": "body",
             "required": true,
@@ -141,10 +162,21 @@
           "400": {
             "description": "Validasi gagal"
           },
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Role tidak memenuhi, atau owner bukan pemilik warung"
+          },
           "404": {
             "description": "Tidak ditemukan"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
         "description": "",
@@ -154,6 +186,11 @@
             "in": "path",
             "required": true,
             "type": "integer"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
@@ -163,10 +200,21 @@
           "400": {
             "description": "Validasi gagal"
           },
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
+          },
           "404": {
             "description": "Tidak ditemukan"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/stalls/{id}/menus": {
@@ -191,6 +239,51 @@
             "description": "Tidak ditemukan"
           }
         }
+      }
+    },
+    "/api/v1/stalls/{id}/reviews": {
+      "post": {
+        "description": "",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/StallReviewInput"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Review ditambahkan (penulis = user dari token)"
+          },
+          "400": {
+            "description": "Validasi gagal"
+          },
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "404": {
+            "description": "Warung tidak ditemukan"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/auth/register": {
@@ -273,29 +366,26 @@
     "/api/v1/users": {
       "get": {
         "description": "",
-        "responses": {
-          "default": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "description": "",
         "parameters": [
           {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/UserInput"
-            }
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/menu-items": {
@@ -311,6 +401,11 @@
         "description": "",
         "parameters": [
           {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "body",
             "in": "body",
             "required": true,
@@ -320,10 +415,18 @@
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/menu-items/{id}": {
@@ -353,6 +456,11 @@
             "type": "string"
           },
           {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "body",
             "in": "body",
             "required": true,
@@ -362,10 +470,18 @@
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
         "description": "",
@@ -375,36 +491,31 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/reviews": {
       "get": {
         "description": "",
-        "responses": {
-          "default": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "description": "",
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/ReviewInput"
-            }
-          }
-        ],
         "responses": {
           "default": {
             "description": ""
@@ -421,19 +532,37 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/likes": {
       "post": {
         "description": "",
         "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
           {
             "name": "body",
             "in": "body",
@@ -444,10 +573,15 @@
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/likes/{id}": {
@@ -459,23 +593,51 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/flags": {
       "get": {
         "description": "",
-        "responses": {
-          "default": {
-            "description": ""
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
-        }
+        ],
+        "responses": {
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/flags/{id}": {
@@ -489,6 +651,11 @@
             "type": "string"
           },
           {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
             "name": "body",
             "in": "body",
             "required": true,
@@ -498,24 +665,52 @@
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/audit": {
       "get": {
         "description": "",
-        "responses": {
-          "default": {
-            "description": ""
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
           }
-        }
+        ],
+        "responses": {
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "post": {
         "description": "",
         "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
           {
             "name": "body",
             "in": "body",
@@ -526,10 +721,18 @@
           }
         ],
         "responses": {
-          "default": {
-            "description": ""
+          "401": {
+            "description": "Belum login atau token tidak valid"
+          },
+          "403": {
+            "description": "Hanya admin"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   },
@@ -619,15 +822,10 @@
         "reviewId": {
           "type": "number",
           "example": 1
-        },
-        "userId": {
-          "type": "number",
-          "example": 12
         }
       },
       "required": [
-        "reviewId",
-        "userId"
+        "reviewId"
       ]
     },
     "FlagStatusInput": {
@@ -734,6 +932,22 @@
       "required": [
         "email",
         "password"
+      ]
+    },
+    "StallReviewInput": {
+      "type": "object",
+      "properties": {
+        "rating": {
+          "type": "number",
+          "example": 5
+        },
+        "comment": {
+          "type": "string",
+          "example": "Enak!"
+        }
+      },
+      "required": [
+        "rating"
       ]
     }
   }
